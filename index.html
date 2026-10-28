@@ -1,0 +1,1311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tulpar | Rocket Simulator</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #151d30;
+      --panel-light: #1b2740;
+      --border: #283650;
+      --text: #f4f6fc;
+      --muted: #929db4;
+      --accent: #f4b544;
+      --green: #49d6a0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      margin: 0;
+      padding: clamp(12px, 2vw, 24px);
+      overflow: hidden;
+      background: radial-gradient(ellipse at 72% -12%, #1c2940 0, transparent 48%), var(--bg);
+      color: var(--text);
+      font: 14px/1.45 "Segoe UI", Arial, sans-serif;
+    }
+
+    button, input { font: inherit; }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) 132px;
+      gap: 12px;
+      width: min(1400px, 100%);
+      height: 100%;
+      min-height: 0;
+      margin: 0 auto;
+    }
+    .header { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 50px; }
+    .eyebrow { color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: .13em; }
+    h1 { margin: 5px 0 0; font-size: clamp(22px, 4vw, 28px); line-height: 1.2; }
+    .status { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 99px; background: var(--panel); color: #c7d0e0; font-size: 11px; font-weight: 700; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .status[data-state="IN FLIGHT"] .status-dot { background: var(--green); box-shadow: 0 0 12px #49d6a077; }
+    .status[data-state="PAUSED"] .status-dot { background: var(--accent); }
+    .status[data-state="CRASHED"] { color: #ffd0c7; border-color: #9c493e; }
+    .status[data-state="CRASHED"] .status-dot { background: #ff604f; box-shadow: 0 0 12px #ff604f88; }
+
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; min-height: 0; align-items: stretch; }
+    .panel { border: 1px solid #202c43; border-radius: 16px; background: var(--panel); }
+    .flight-panel { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; padding: 12px; overflow: hidden; }
+    canvas { display: block; width: 100%; }
+    #scene { height: 100%; min-height: 0; border-radius: 10px; background: #101a2a; }
+    .scene-caption { margin: 10px 3px 0; color: var(--muted); font-size: 10px; letter-spacing: .06em; }
+
+    .setup {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-content: start;
+      align-items: end;
+      gap: 8px 12px;
+      min-height: 0;
+      padding: 16px;
+      overflow: visible;
+      position: relative;
+    }
+    h2 { margin: 0; font-size: 16px; }
+    .setup h2, .setup .subheading, .setup .actions, .setup .hint { grid-column: 1 / -1; }
+    .subheading { margin: -5px 0 2px; color: var(--muted); font-size: 12px; }
+    .field { display: block; min-width: 0; margin: 0; }
+    .field[data-tooltip] { position: relative; z-index: 1; }
+    .field[data-tooltip]:hover, .field[data-tooltip]:focus-within { z-index: 8; }
+    .field span { display: block; min-height: 17px; margin-bottom: 4px; color: #c7d0e0; font-size: 11px; }
+    .field input { width: 100%; min-width: 0; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; outline: none; background: #0e1525; color: var(--text); }
+    .field input:focus { border-color: var(--accent); }
+    .field input:disabled { opacity: .65; }
+    .weather-field { grid-column: 1 / -1; }
+    .field select {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      outline: none;
+      background: #0e1525;
+      color: var(--text);
+    }
+    .field select:focus { border-color: var(--accent); }
+    .field select:disabled { opacity: .65; }
+    .field[data-tooltip]::after {
+      position: absolute;
+      z-index: 9;
+      top: calc(100% + 7px);
+      left: 0;
+      width: min(260px, calc(100% + 123px), 80vw);
+      box-sizing: border-box;
+      padding: 9px 11px;
+      border: 1px solid #43536d;
+      border-radius: 8px;
+      background: #0b1322;
+      box-shadow: 0 9px 24px rgba(0, 0, 0, .4);
+      color: #e8edf6;
+      content: attr(data-tooltip);
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.45;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-3px);
+      transition: opacity .16s ease, transform .16s ease;
+    }
+    .field:nth-of-type(even)[data-tooltip]::after { left: auto; right: 0; }
+    .weather-field[data-tooltip]::after { width: min(260px, 100%); }
+    .field[data-tooltip]:hover::after, .field[data-tooltip]:focus-within::after {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 2s;
+    }
+
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px; }
+    button { min-height: 36px; padding: 7px 10px; border: 0; border-radius: 7px; cursor: pointer; font-weight: 700; transition: filter .15s, transform .15s; }
+    button:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+    button:disabled { cursor: not-allowed; opacity: .5; }
+    .launch { grid-column: 1 / -1; background: var(--accent); color: #111827; }
+    .secondary { background: #27334a; color: #e4e9f3; }
+    .hint { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+
+    .dashboard { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(230px, 2.1fr); gap: 9px; min-height: 0; }
+    .metric, .chart-panel { min-height: 0; padding: 12px; overflow: hidden; }
+    .metric { display: flex; flex-direction: column; justify-content: center; }
+    .metric-label, .chart-title { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .045em; }
+    .metric-value { margin-top: 5px; font-size: clamp(17px, 2vw, 21px); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .metric-detail { margin-top: 3px; color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+    .chart-panel { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+    #chart { min-height: 0; height: 100%; margin-top: 3px; }
+
+    @media (max-width: 850px) {
+      .app { grid-template-rows: auto minmax(0, 1fr) 160px; gap: 9px; }
+      .workspace { grid-template-columns: minmax(0, 1fr) 270px; gap: 10px; }
+      .setup { gap: 6px 9px; padding: 12px; }
+      .dashboard { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: 62px minmax(0, 1fr); gap: 7px; }
+      .chart-panel { grid-column: 1 / -1; grid-row: 2; }
+      .metric { padding: 7px; }
+      .metric-value { font-size: clamp(14px, 2.5vw, 19px); }
+    }
+
+    @media (max-width: 620px) {
+      body { height: auto; min-height: 100vh; min-height: 100dvh; padding: 14px; overflow: auto; }
+      .app { display: flex; height: auto; min-height: 100%; flex-direction: column; }
+      .header { min-height: 50px; margin-bottom: 4px; }
+      .workspace { grid-template-columns: 1fr; }
+      .flight-panel { height: min(58vh, 480px); min-height: 340px; }
+      .setup { grid-row: 1; min-height: 0; }
+      .dashboard { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
+      .metric { min-height: 82px; padding: 12px; }
+      .metric-value { font-size: 20px; }
+      .chart-panel { grid-column: 1 / -1; }
+      #chart { min-height: 100px; }
+    }
+
+    @media (max-height: 780px) and (min-width: 621px) {
+      body { padding-top: 10px; padding-bottom: 10px; }
+      .app { grid-template-rows: auto minmax(0, 1fr) 148px; gap: 8px; }
+      .header { min-height: 42px; }
+      .setup { gap: 5px 10px; padding: 10px 12px; }
+      .field span { margin-bottom: 2px; }
+      .field input { padding-top: 5px; padding-bottom: 5px; }
+      button { min-height: 32px; }
+      .metric, .chart-panel { padding: 8px; }
+      .metric-value { margin-top: 2px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <div>
+        <div class="eyebrow">TULPAR</div>
+        <h1>Rocket Simulator</h1>
+      </div>
+      <div class="status" id="status" data-state="READY"><span class="status-dot"></span><span id="statusText">READY</span></div>
+    </header>
+
+    <section class="workspace" aria-label="Rocket simulator">
+      <section class="panel flight-panel" aria-label="2.5D rocket flight view">
+        <canvas id="scene"></canvas>
+        <div class="scene-caption">2.5D ASCENT &bull; 120 KM NEAR-SPACE CHECKPOINT &bull; NOT ORBITAL</div>
+      </section>
+
+      <section class="panel setup">
+        <h2>Rocket setup</h2>
+        <p class="subheading">Set the vehicle and motor parameters.</p>
+        <label class="field" data-tooltip="The vehicle mass without propellant. It remains after the engine burns out and strongly affects acceleration.">
+          <span>Dry mass (kg)</span><input id="dryMass" type="number" min="0.1" step="any" value="100000">
+        </label>
+        <label class="field" data-tooltip="The usable fuel and oxidizer mass. The simulator subtracts propellant as the engine burns.">
+          <span>Propellant mass (kg)</span><input id="propellantMass" type="number" min="0.1" step="any" value="900000">
+        </label>
+        <label class="field" data-tooltip="Engine force while burning. Higher thrust increases acceleration, but the vehicle must weigh less than its thrust divided by local gravity to lift off.">
+          <span>Engine thrust (N)</span><input id="thrust" type="number" min="0.1" step="any" value="13000000">
+        </label>
+        <label class="field" data-tooltip="Maximum time the engine is allowed to burn. It can stop sooner if the propellant runs out.">
+          <span>Burn duration (s)</span><input id="burnDuration" type="number" min="0.1" step="any" value="210">
+        </label>
+        <label class="field" data-tooltip="A dimensionless measure of how strongly the rocket resists airflow. The model uses it with air density, speed, and frontal area to calculate drag.">
+          <span>Drag coefficient</span><input id="dragCoefficient" type="number" min="0" step="any" value="0.5">
+        </label>
+        <label class="field" data-tooltip="The rocket body width. The simulator uses its circular frontal area to estimate aerodynamic drag.">
+          <span>Body diameter (m)</span><input id="diameter" type="number" min="0.1" step="any" value="8">
+        </label>
+        <label class="field" data-tooltip="Engine efficiency: exhaust speed divided by standard gravity. Together with thrust, this determines propellant consumption.">
+          <span>Specific impulse (s)</span><input id="specificImpulse" type="number" min="1" step="any" value="300">
+        </label>
+        <label class="field weather-field" data-tooltip="Weather changes crosswind, gusts, turbulence, rain, and lightning. Storm conditions can cause loss of control and a simulated crash.">
+          <span>Launch weather</span>
+          <select id="weather">
+            <option value="calm">Calm · light wind</option>
+            <option value="windy">Windy · strong gusts</option>
+            <option value="storm">Thunderstorm · dangerous</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button class="launch" id="launch">Launch simulation</button>
+          <button class="secondary" id="pause" disabled>Pause</button>
+          <button class="secondary" id="reset">Reset</button>
+        </div>
+        <p class="hint">2.5D launch model. Weather adds wind, shear, turbulence, and possible structural failure. Educational only—not real flight prediction.</p>
+      </section>
+    </section>
+
+    <section class="dashboard" aria-label="Flight data">
+      <div class="panel metric"><div class="metric-label">ALTITUDE</div><div class="metric-value" id="altitude">0 m</div></div>
+      <div class="panel metric"><div class="metric-label">VELOCITY</div><div class="metric-value" id="velocity">0 m/s</div></div>
+      <div class="panel metric"><div class="metric-label">ACCELERATION</div><div class="metric-value" id="acceleration">0 m/s²</div></div>
+      <div class="panel metric"><div class="metric-label">FLIGHT TIME</div><div class="metric-value" id="time">0:00</div><div class="metric-detail">MODEL TIME · 8× PLAYBACK</div></div>
+      <div class="panel chart-panel"><div class="chart-title">ALTITUDE PROFILE (m)</div><canvas id="chart"></canvas></div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const gravity = 9.80665;
+      const specificGasConstant = 287.05287;
+      const fixedStep = 0.02;
+      const earthRadiusMeters = 6371000;
+      const spaceCheckpointMeters = 120000;
+      const simulationTimeScale = 8;
+      const atmosphereLayers = [
+        { top: 11000, lapseRate: -0.0065 },
+        { top: 20000, lapseRate: 0 },
+        { top: 32000, lapseRate: 0.001 },
+        { top: 47000, lapseRate: 0.0028 },
+        { top: 51000, lapseRate: 0 },
+        { top: 71000, lapseRate: -0.0028 },
+        { top: 84852, lapseRate: -0.002 }
+      ];
+      const fields = [
+        "dryMass", "propellantMass", "thrust", "burnDuration",
+        "dragCoefficient", "diameter", "specificImpulse"
+      ];
+      const controls = [...fields, "weather"];
+      const weatherProfiles = {
+        calm: { surfaceWind: 2, upperWind: 18, gust: 1, rain: 0, failureLimit: 2400 },
+        windy: { surfaceWind: 14, upperWind: 38, gust: 14, rain: 0, failureLimit: 2400 },
+        storm: { surfaceWind: 25, upperWind: 85, gust: 54, rain: 1, failureLimit: 2400 }
+      };
+      const scene = document.getElementById("scene");
+      const chart = document.getElementById("chart");
+      const sceneContext = scene.getContext("2d");
+      const chartContext = chart.getContext("2d");
+      const status = document.getElementById("status");
+      const samples = [{ time: 0, altitude: 0 }];
+
+      let config = null;
+      let flight = null;
+      let paused = false;
+      let previousFrame = 0;
+      let accumulator = 0;
+      let lastChartSample = 0;
+      let animationId = 0;
+
+      function weatherAt(altitude, time) {
+        const profile = weatherProfiles[config ? config.weather : document.getElementById("weather").value];
+        const upperAirBlend = smoothstep(500, 12000, Math.max(0, altitude));
+        const gustFactor = Math.sin(time * 0.72)
+          + 0.36 * Math.sin(time * 1.93 + 1.6)
+          + 0.2 * Math.sin(time * 4.21 + 0.4);
+        const speed = profile.surfaceWind
+          + (profile.upperWind - profile.surfaceWind) * upperAirBlend
+          + profile.gust * gustFactor;
+        return { speed, rain: profile.rain, profile };
+      }
+
+      function screenOffsetForDownrange(width, altitude, downrange) {
+        if (!downrange) return 0;
+        const visibleRange = Math.max(900, altitude * 0.035, Math.abs(downrange) * 1.8);
+        return Math.max(-width * 0.34, Math.min(width * 0.34,
+          downrange * width * 0.36 / visibleRange));
+      }
+
+      function resizeCanvas(canvas, context) {
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.round(rect.width * ratio);
+        const height = Math.round(rect.height * ratio);
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        return { width: rect.width, height: rect.height };
+      }
+
+      function drawRocket(context, x, y, engineOn, timestamp, pitch = 0) {
+        context.save();
+        context.translate(x, y);
+        context.rotate(pitch);
+        context.scale(1.18, 1.18);
+
+        if (engineOn) {
+          const flicker = 0.88 + Math.sin(timestamp * 0.035) * 0.1;
+          const glow = context.createRadialGradient(0, 70, 2, 0, 70, 43);
+          glow.addColorStop(0, "rgba(255, 181, 65, .5)");
+          glow.addColorStop(1, "rgba(255, 118, 42, 0)");
+          context.fillStyle = glow;
+          context.beginPath();
+          context.ellipse(0, 71, 35, 44, 0, 0, Math.PI * 2);
+          context.fill();
+
+          context.save();
+          context.scale(flicker, 1);
+          const plume = context.createLinearGradient(0, 46, 0, 127);
+          plume.addColorStop(0, "#fff9dc");
+          plume.addColorStop(.17, "#fff0ad");
+          plume.addColorStop(.48, "#ffad38");
+          plume.addColorStop(1, "rgba(249, 91, 28, 0)");
+          context.fillStyle = plume;
+          context.beginPath();
+          context.moveTo(-8, 47);
+          context.bezierCurveTo(-8, 73, -4, 94, 0, 126);
+          context.bezierCurveTo(5, 95, 9, 73, 8, 47);
+          context.closePath();
+          context.fill();
+          context.fillStyle = "#fffdf1";
+          context.beginPath();
+          context.moveTo(-3, 49);
+          context.bezierCurveTo(-2, 69, -1, 82, 0, 93);
+          context.bezierCurveTo(2, 80, 3, 66, 3, 49);
+          context.closePath();
+          context.fill();
+          context.restore();
+        }
+
+        context.fillStyle = "#67788b";
+        context.fillRect(-13, 43, 26, 8);
+        context.fillStyle = "#d6e0e9";
+        context.fillRect(-11, 44, 22, 5);
+
+        context.fillStyle = "#4d5c6b";
+        context.fillRect(-11, 38, 22, 5);
+        context.fillStyle = "#cbd4da";
+        context.fillRect(-8, 38, 16, 2);
+
+        const body = context.createLinearGradient(-13, 0, 13, 0);
+        body.addColorStop(0, "#526577");
+        body.addColorStop(.13, "#a6b5c1");
+        body.addColorStop(.27, "#e9eef0");
+        body.addColorStop(.53, "#fffef8");
+        body.addColorStop(.74, "#d8e0e4");
+        body.addColorStop(.91, "#a4b2bd");
+        body.addColorStop(1, "#5a6b7b");
+        context.fillStyle = body;
+        context.beginPath();
+        context.moveTo(-11, 43);
+        context.lineTo(-11, -31);
+        context.quadraticCurveTo(-10, -37, 0, -56);
+        context.quadraticCurveTo(10, -37, 11, -31);
+        context.lineTo(11, 43);
+        context.closePath();
+        context.fill();
+        context.strokeStyle = "rgba(231, 241, 248, .78)";
+        context.lineWidth = 1;
+        context.stroke();
+        context.save();
+        context.beginPath();
+        context.moveTo(-10, -9);
+        context.lineTo(10, -9);
+        context.lineTo(10, 42);
+        context.lineTo(-10, 42);
+        context.closePath();
+        context.clip();
+        const reflectedLight = context.createLinearGradient(-10, 0, 11, 0);
+        reflectedLight.addColorStop(0, "rgba(32, 55, 73, .23)");
+        reflectedLight.addColorStop(.26, "rgba(255, 255, 255, .18)");
+        reflectedLight.addColorStop(.52, "rgba(255, 255, 255, 0)");
+        reflectedLight.addColorStop(.82, "rgba(58, 83, 101, .12)");
+        reflectedLight.addColorStop(1, "rgba(20, 38, 53, .28)");
+        context.fillStyle = reflectedLight;
+        context.fillRect(-12, -10, 24, 55);
+        context.restore();
+
+        context.fillStyle = "#a94f32";
+        context.beginPath();
+        context.moveTo(-10, 21);
+        context.lineTo(-25, 46);
+        context.lineTo(-23, 35);
+        context.lineTo(-10, 30);
+        context.closePath();
+        context.fill();
+        context.beginPath();
+        context.moveTo(10, 21);
+        context.lineTo(25, 46);
+        context.lineTo(23, 35);
+        context.lineTo(10, 30);
+        context.closePath();
+        context.fill();
+        context.fillStyle = "#63392f";
+        context.beginPath();
+        context.moveTo(-25, 46);
+        context.lineTo(-23, 35);
+        context.lineTo(-20, 37);
+        context.lineTo(-21, 44);
+        context.closePath();
+        context.fill();
+        context.beginPath();
+        context.moveTo(25, 46);
+        context.lineTo(23, 35);
+        context.lineTo(20, 37);
+        context.lineTo(21, 44);
+        context.closePath();
+        context.fill();
+        context.fillStyle = "#e08b53";
+        context.beginPath();
+        context.moveTo(-11, 28);
+        context.lineTo(-20, 43);
+        context.lineTo(-19, 37);
+        context.lineTo(-11, 34);
+        context.closePath();
+        context.fill();
+        context.beginPath();
+        context.moveTo(11, 28);
+        context.lineTo(20, 43);
+        context.lineTo(19, 37);
+        context.lineTo(11, 34);
+        context.closePath();
+        context.fill();
+
+        context.fillStyle = "#d88745";
+        context.fillRect(-11, -3, 22, 5);
+        context.fillStyle = "#eef1e9";
+        context.fillRect(-11, -1.5, 22, 2);
+        context.fillStyle = "rgba(84, 51, 37, .48)";
+        context.fillRect(-11, 2, 22, 1);
+        context.fillStyle = "#bd613c";
+        context.fillRect(-11, 17, 22, 4);
+        context.fillStyle = "#f1c177";
+        context.fillRect(-11, 17, 22, 1);
+        context.fillStyle = "#7e4935";
+        context.fillRect(-11, 21, 22, 1);
+
+        const windowGradient = context.createLinearGradient(-5, 0, 5, 0);
+        windowGradient.addColorStop(0, "#25506b");
+        windowGradient.addColorStop(.4, "#8fd1df");
+        windowGradient.addColorStop(1, "#315f78");
+        context.fillStyle = windowGradient;
+        context.beginPath();
+        context.ellipse(0, -19, 5.3, 7, 0, 0, Math.PI * 2);
+        context.fill();
+        context.strokeStyle = "#8b9eab";
+        context.lineWidth = 1.5;
+        context.stroke();
+        context.strokeStyle = "rgba(255, 255, 255, .6)";
+        context.lineWidth = 1;
+        context.beginPath();
+        context.moveTo(-2, -23);
+        context.lineTo(1, -20);
+        context.stroke();
+        context.fillStyle = "rgba(225, 247, 255, .7)";
+        context.beginPath();
+        context.ellipse(-1.5, -21, 1.2, 2.2, -.3, 0, Math.PI * 2);
+        context.fill();
+
+        context.fillStyle = "#a94f32";
+        context.font = "bold 5px Segoe UI, Arial, sans-serif";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText("T", 0, 10);
+        context.fillStyle = "#728397";
+        context.fillRect(-7, 27, 2, 7);
+        context.fillRect(5, 27, 2, 7);
+        context.fillStyle = "#5f6f7d";
+        for (const rivetY of [-6, 5, 14, 24, 35]) {
+          context.beginPath();
+          context.arc(-8.5, rivetY, .7, 0, Math.PI * 2);
+          context.arc(8.5, rivetY, .7, 0, Math.PI * 2);
+          context.fill();
+        }
+        context.restore();
+      }
+
+      function drawCloud(context, x, y, scale, alpha) {
+        context.save();
+        context.globalAlpha = alpha;
+        context.fillStyle = "#6e8b9d";
+        context.beginPath();
+        context.ellipse(x + 2 * scale, y + 3 * scale, 45 * scale, 9 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(x - 19 * scale, y - 1 * scale, 19 * scale, 9 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(x + 13 * scale, y - 3 * scale, 25 * scale, 12 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(x + 34 * scale, y + 1 * scale, 16 * scale, 8 * scale, 0, 0, Math.PI * 2);
+        context.fill();
+
+        const cloudLight = context.createLinearGradient(x, y - 14 * scale, x, y + 8 * scale);
+        cloudLight.addColorStop(0, "#f1f6f4");
+        cloudLight.addColorStop(.56, "#cbdde2");
+        cloudLight.addColorStop(1, "#91a9b4");
+        context.fillStyle = cloudLight;
+        context.beginPath();
+        context.ellipse(x, y, 40 * scale, 8 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(x - 19 * scale, y - 4 * scale, 20 * scale, 10 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(x + 12 * scale, y - 6 * scale, 25 * scale, 13 * scale, 0, 0, Math.PI * 2);
+        context.ellipse(x + 34 * scale, y - 2 * scale, 17 * scale, 8 * scale, 0, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+
+      function drawLaunchSmoke(context, x, y, timestamp, altitude) {
+        const elapsed = timestamp / 1000;
+        for (let i = 0; i < 18; i++) {
+          const phase = ((elapsed * (0.42 + (i % 4) * 0.07) + i * 0.173) % 1);
+          const spread = 12 + phase * 85;
+          const puffX = x + Math.sin(elapsed * 2.1 + i * 2.7) * spread;
+          const puffY = y - phase * (58 + Math.min(altitude * 0.15, 30));
+          const radius = 5 + phase * (13 + (i % 3) * 4);
+          const alpha = (1 - phase) * (1 - Math.min(altitude / 190, 0.8)) * 0.2;
+          context.globalAlpha = alpha;
+          const smoke = context.createRadialGradient(
+            puffX - radius * .25, puffY - radius * .3, 1,
+            puffX, puffY, radius);
+          smoke.addColorStop(0, "#f8f4ec");
+          smoke.addColorStop(.7, "#c8d0d1");
+          smoke.addColorStop(1, "rgba(137, 153, 160, 0)");
+          context.fillStyle = smoke;
+          context.beginPath();
+          context.arc(puffX, puffY, radius, 0, Math.PI * 2);
+          context.fill();
+        }
+        context.globalAlpha = 1;
+      }
+
+      function smoothstep(start, end, value) {
+        const amount = Math.max(0, Math.min(1, (value - start) / (end - start)));
+        return amount * amount * (3 - 2 * amount);
+      }
+
+      function drawEarth(context, width, height, altitude, spaceProgress, timestamp) {
+        const visibility = smoothstep(900, 14000, altitude);
+        if (visibility <= 0) return;
+
+        const radius = height * (.56 - .16 * spaceProgress);
+        const centerX = width / 2;
+        const centerY = height + radius * .2;
+        const elapsed = timestamp / 1000;
+
+        context.save();
+        context.globalAlpha = visibility;
+        context.shadowColor = "rgba(88, 182, 255, .85)";
+        context.shadowBlur = 16 + 9 * spaceProgress;
+        context.strokeStyle = "rgba(117, 207, 255, .9)";
+        context.lineWidth = 4 + 3 * spaceProgress;
+        context.beginPath();
+        context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        context.stroke();
+        context.shadowBlur = 0;
+
+        const planet = context.createRadialGradient(
+          centerX - radius * .25,
+          centerY - radius * .8,
+          radius * .04,
+          centerX,
+          centerY - radius * .45,
+          radius * 1.75);
+        planet.addColorStop(0, "#5297b7");
+        planet.addColorStop(.36, "#286487");
+        planet.addColorStop(.76, "#123956");
+        planet.addColorStop(1, "#071321");
+
+        context.fillStyle = planet;
+        context.beginPath();
+        context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        context.fill();
+        context.save();
+        context.beginPath();
+        context.arc(centerX, centerY, radius - 1, 0, Math.PI * 2);
+        context.clip();
+
+        const landOffset = Math.sin(elapsed * .025) * radius * .035;
+        context.fillStyle = "rgba(103, 155, 127, .66)";
+        context.beginPath();
+        context.moveTo(centerX - radius * .83 + landOffset, centerY - radius * .68);
+        context.bezierCurveTo(centerX - radius * .62, centerY - radius * .83,
+          centerX - radius * .37, centerY - radius * .63, centerX - radius * .42, centerY - radius * .48);
+        context.bezierCurveTo(centerX - radius * .5, centerY - radius * .36,
+          centerX - radius * .36, centerY - radius * .22, centerX - radius * .55, centerY - radius * .1);
+        context.bezierCurveTo(centerX - radius * .73, centerY - radius * .08,
+          centerX - radius * .91, centerY - radius * .36, centerX - radius * .83 + landOffset, centerY - radius * .68);
+        context.fill();
+
+        context.beginPath();
+        context.moveTo(centerX + radius * .03 + landOffset, centerY - radius * .76);
+        context.bezierCurveTo(centerX + radius * .29, centerY - radius * .8,
+          centerX + radius * .37, centerY - radius * .58, centerX + radius * .24, centerY - radius * .46);
+        context.bezierCurveTo(centerX + radius * .43, centerY - radius * .32,
+          centerX + radius * .36, centerY - radius * .13, centerX + radius * .18, centerY - radius * .15);
+        context.bezierCurveTo(centerX + radius * .01, centerY - radius * .29,
+          centerX - radius * .03, centerY - radius * .5, centerX + radius * .03 + landOffset, centerY - radius * .76);
+        context.fill();
+
+        context.globalAlpha *= .38;
+        context.strokeStyle = "#e3f1f1";
+        context.lineWidth = Math.max(2, radius * .035);
+        context.lineCap = "round";
+        for (let i = 0; i < 5; i++) {
+          const bandY = centerY - radius * (.56 - i * .2);
+          const drift = Math.sin(elapsed * .07 + i * 2) * radius * .08;
+          context.beginPath();
+          context.moveTo(centerX - radius * .88 + drift, bandY);
+          context.bezierCurveTo(centerX - radius * .45 + drift, bandY - radius * .05,
+            centerX - radius * .1 + drift, bandY + radius * .045,
+            centerX + radius * .17 + drift, bandY - radius * .012);
+          context.stroke();
+        }
+        context.restore();
+
+        context.strokeStyle = "rgba(202, 236, 255, .78)";
+        context.lineWidth = 1;
+        context.beginPath();
+        context.arc(centerX, centerY, radius - 2, Math.PI * 1.08, Math.PI * 1.92);
+        context.stroke();
+        context.restore();
+      }
+
+      function drawScene(timestamp = 0) {
+        const size = resizeCanvas(scene, sceneContext);
+        if (!size) return;
+        const { width, height } = size;
+        const ctx = sceneContext;
+        ctx.clearRect(0, 0, width, height);
+        const altitude = flight ? flight.altitude : 0;
+        const engineOn = Boolean(flight && isEngineRunning());
+        const sceneProgress = Math.min(1, altitude / 600);
+        const spaceProgress = smoothstep(18000, 120000, altitude);
+        const rise = Math.min(altitude * 0.34, height * 0.46);
+        const groundY = height - 72 + rise;
+        const rocketY = height - 128 - rise;
+        const elapsed = timestamp / 1000;
+        const modelTime = flight ? flight.time : elapsed * simulationTimeScale;
+        const wind = weatherAt(altitude, modelTime);
+        const rocketX = width / 2 + screenOffsetForDownrange(
+          width, altitude, flight ? flight.downrange : 0);
+        const pitch = flight
+          ? Math.max(-0.2, Math.min(0.2, Math.atan2(flight.horizontalVelocity,
+            Math.max(30, Math.abs(flight.velocity))) * 0.7))
+          : 0;
+        const sky = ctx.createLinearGradient(0, 0, 0, height);
+        sky.addColorStop(0, "#3b7098");
+        sky.addColorStop(.37, "#83b3c8");
+        sky.addColorStop(.71, "#c6d2c8");
+        sky.addColorStop(1, "#e8c49a");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, width, height);
+
+        const upperSky = ctx.createLinearGradient(0, 0, 0, height);
+        upperSky.addColorStop(0, "#030916");
+        upperSky.addColorStop(.57, "#08182c");
+        upperSky.addColorStop(1, "#102842");
+        ctx.globalAlpha = spaceProgress * .97;
+        ctx.fillStyle = upperSky;
+        ctx.fillRect(0, 0, width, height);
+        ctx.globalAlpha = 1;
+
+        const horizonGlow = ctx.createRadialGradient(width * .72, height * .79, 2,
+          width * .72, height * .79, height * .65);
+        horizonGlow.addColorStop(0, `rgba(255, 221, 163, ${.32 * (1 - spaceProgress)})`);
+        horizonGlow.addColorStop(1, "rgba(255, 194, 116, 0)");
+        ctx.fillStyle = horizonGlow;
+        ctx.fillRect(0, 0, width, height);
+        if (wind.rain && altitude < 16000) {
+          ctx.fillStyle = `rgba(17, 29, 48, ${.24 * wind.rain
+            * (1 - smoothstep(9000, 16000, altitude))})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        let seed = 421;
+        const random = () => {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        };
+        for (let i = 0; i < 75; i++) {
+          const x = random() * width;
+          const y = random() * height * .68;
+          const radius = .5 + random() * 1.1;
+          ctx.globalAlpha = spaceProgress * (.22 + random() * .55)
+            * (.78 + Math.sin(elapsed * 1.7 + i * 1.9) * .22);
+          ctx.fillStyle = i % 7 === 0 ? "#ffe2ad" : "#d9e9f5";
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        const cloudFade = 1 - spaceProgress;
+        const cloudDrift = wind.speed * .18;
+        const cloudOneX = ((width * .18 + elapsed * (10 + cloudDrift) - altitude * .08) % (width + 150) + width + 150) % (width + 150) - 60;
+        const cloudTwoX = ((width * .82 + elapsed * (8 + cloudDrift) + altitude * .05) % (width + 180) + width + 180) % (width + 180) - 70;
+        const cloudThreeX = ((width * .7 + elapsed * (6 + cloudDrift) - altitude * .035) % (width + 180) + width + 180) % (width + 180) - 70;
+        drawCloud(ctx, cloudOneX, height * .32 + Math.sin(elapsed * .18) * 3, .85, .64 * cloudFade);
+        drawCloud(ctx, cloudTwoX, height * .22 + Math.sin(elapsed * .14 + 2) * 2, .68, .52 * cloudFade);
+        drawCloud(ctx, cloudThreeX, height * .53 + Math.sin(elapsed * .12 + 4) * 2, 1.15, .42 * cloudFade);
+
+        if (wind.rain && altitude < 14000) {
+          const rainFade = wind.rain * (1 - smoothstep(9000, 14000, altitude));
+          ctx.save();
+          ctx.globalAlpha = rainFade * .55;
+          ctx.strokeStyle = "#d8e9f5";
+          ctx.lineWidth = 1;
+          for (let i = 0; i < 95; i++) {
+            const x = (i * 83 + elapsed * 145) % (width + 60) - 30;
+            const y = (i * 47 + elapsed * 310) % height;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x - 8, y + 18);
+            ctx.stroke();
+          }
+          ctx.restore();
+          const lightningPhase = (elapsed + 1.7) % 11;
+          const flash = Math.max(0, 1 - Math.abs(lightningPhase - 7.8) * 4.5);
+          if (flash > 0) {
+            ctx.fillStyle = `rgba(218, 232, 255, ${flash * .32 * rainFade})`;
+            ctx.fillRect(0, 0, width, height);
+          }
+        }
+
+        if (altitude < 16000 && Math.abs(wind.speed) > 3) {
+          const arrowY = height * .66;
+          ctx.save();
+          ctx.globalAlpha = .22 * (1 - spaceProgress);
+          ctx.strokeStyle = "#f5e2ae";
+          ctx.fillStyle = "#f5e2ae";
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 3; i++) {
+            const x = 28 + i * 34 + ((elapsed * 24) % 34);
+            ctx.beginPath();
+            ctx.moveTo(x, arrowY + i * 18);
+            ctx.lineTo(x + 24, arrowY + i * 18);
+            ctx.lineTo(x + 18, arrowY + i * 18 - 5);
+            ctx.moveTo(x + 24, arrowY + i * 18);
+            ctx.lineTo(x + 18, arrowY + i * 18 + 5);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        const gridTop = Math.max(22, height * .09);
+        const gridBottom = Math.min(height - 18, groundY - 25);
+        ctx.strokeStyle = `rgba(191, 211, 225, ${.12 * (1 - spaceProgress)})`;
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+          const y = gridTop + (gridBottom - gridTop) * i / 4;
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+          ctx.fillStyle = `rgba(220, 233, 241, ${.6 * (1 - spaceProgress)})`;
+          ctx.font = "10px Segoe UI, Arial, sans-serif";
+          ctx.textBaseline = "middle";
+          ctx.fillText(`${Math.round((4 - i) * Math.max(250, altitude * 1.25) / 4)} m`, 12, y - 9);
+        }
+
+        if (groundY < height + 30) {
+          const distantTerrain = ctx.createLinearGradient(0, groundY - 62, 0, height);
+          distantTerrain.addColorStop(0, "#64716b");
+          distantTerrain.addColorStop(.35, "#394b43");
+          distantTerrain.addColorStop(1, "#27372f");
+          ctx.fillStyle = distantTerrain;
+          ctx.beginPath();
+          ctx.moveTo(0, groundY + 4);
+          ctx.quadraticCurveTo(width * .18, groundY - 34, width * .41, groundY - 5);
+          ctx.quadraticCurveTo(width * .69, groundY + 28, width, groundY - 20);
+          ctx.lineTo(width, height);
+          ctx.lineTo(0, height);
+          ctx.closePath();
+          ctx.fill();
+
+          const foreground = ctx.createLinearGradient(0, groundY, 0, height);
+          foreground.addColorStop(0, "#536047");
+          foreground.addColorStop(.12, "#424f3d");
+          foreground.addColorStop(1, "#26352c");
+          ctx.fillStyle = foreground;
+          ctx.beginPath();
+          ctx.moveTo(0, groundY + 23);
+          ctx.quadraticCurveTo(width * .24, groundY - 4, width * .5, groundY + 20);
+          ctx.quadraticCurveTo(width * .78, groundY + 39, width, groundY + 7);
+          ctx.lineTo(width, height);
+          ctx.lineTo(0, height);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.save();
+          ctx.globalAlpha = .16;
+          ctx.strokeStyle = "#c4b48d";
+          ctx.lineWidth = 1;
+          for (let i = 0; i < 6; i++) {
+            const x = ((i * width / 5 + elapsed * (3 + i) + altitude * .12) % (width + 30)) - 15;
+            ctx.beginPath();
+            ctx.moveTo(x, groundY + 36);
+            ctx.lineTo(x - 18, height);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          if (altitude < 420) {
+            const padX = width / 2;
+            ctx.fillStyle = "#4c535a";
+            ctx.fillRect(padX - 61, groundY - 13, 122, 13);
+            ctx.fillStyle = "#5c6570";
+            ctx.fillRect(padX - 56, groundY - 11, 112, 8);
+            ctx.fillStyle = "#87919a";
+            ctx.fillRect(padX - 44, groundY - 7, 88, 2);
+            ctx.fillStyle = "#d5a65f";
+            ctx.fillRect(padX - 52, groundY - 10, 8, 2);
+            ctx.fillRect(padX + 44, groundY - 10, 8, 2);
+            if (altitude < 70) {
+              const towerGradient = ctx.createLinearGradient(padX - 43, 0, padX - 31, 0);
+              towerGradient.addColorStop(0, "#4f5c66");
+              towerGradient.addColorStop(.45, "#a8b3b7");
+              towerGradient.addColorStop(1, "#596772");
+              ctx.strokeStyle = towerGradient;
+              ctx.lineWidth = 5;
+              ctx.beginPath();
+              ctx.moveTo(padX - 39, groundY - 10);
+              ctx.lineTo(padX - 39, groundY - 158);
+              ctx.moveTo(padX - 46, groundY - 117);
+              ctx.lineTo(padX - 24, groundY - 117);
+              ctx.moveTo(padX - 46, groundY - 79);
+              ctx.lineTo(padX - 24, groundY - 79);
+              ctx.stroke();
+              ctx.strokeStyle = "#c1c9c9";
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(padX - 39, groundY - 145);
+              ctx.lineTo(padX - 17, groundY - 145);
+              ctx.lineTo(padX - 17, groundY - 48);
+              ctx.stroke();
+            }
+          }
+        }
+
+        drawEarth(ctx, width, height, altitude, spaceProgress, timestamp);
+
+        if (flight && isEngineRunning() && altitude < 150) {
+          const smoke = ctx.createRadialGradient(rocketX, groundY - 25, 3,
+            rocketX, groundY - 25, 75 + Math.min(altitude, 50));
+          smoke.addColorStop(0, "rgba(238, 228, 208, .68)");
+          smoke.addColorStop(1, "rgba(238, 228, 208, 0)");
+          ctx.fillStyle = smoke;
+          ctx.beginPath();
+          ctx.ellipse(rocketX, groundY - 24, 115, 34, 0, 0, Math.PI * 2);
+          ctx.fill();
+          drawLaunchSmoke(ctx, rocketX, groundY + 8, timestamp, altitude);
+        }
+
+        if (engineOn && altitude > 6 && altitude < 50000) {
+          const trail = ctx.createLinearGradient(rocketX, rocketY + 45, rocketX, height);
+          const trailOpacity = .24 * (1 - altitude / 50000);
+          trail.addColorStop(0, `rgba(255, 174, 70, ${trailOpacity})`);
+          trail.addColorStop(1, "rgba(255, 174, 70, 0)");
+          ctx.fillStyle = trail;
+          ctx.fillRect(rocketX - 4, rocketY + 43, 8, height - rocketY);
+        }
+
+        const launchShake = engineOn ? Math.sin(timestamp * .045) * Math.max(.15, 1 - altitude / 130) * 1.15 : 0;
+        drawRocket(ctx, rocketX + launchShake, rocketY, engineOn, timestamp, pitch);
+        if (flight && flight.crashed) {
+          const pulse = .7 + .3 * Math.sin(elapsed * 12);
+          const blast = ctx.createRadialGradient(rocketX, rocketY, 3, rocketX, rocketY, 46 * pulse);
+          blast.addColorStop(0, "rgba(255, 246, 186, .95)");
+          blast.addColorStop(.25, "rgba(255, 144, 54, .85)");
+          blast.addColorStop(1, "rgba(206, 57, 34, 0)");
+          ctx.fillStyle = blast;
+          ctx.beginPath();
+          ctx.arc(rocketX, rocketY, 46 * pulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#ffd1c7";
+          ctx.textAlign = "center";
+          ctx.font = "800 13px Segoe UI, Arial, sans-serif";
+          ctx.fillText("WIND-LOAD FAILURE", rocketX, rocketY - 58);
+        }
+
+        ctx.fillStyle = "rgba(8, 17, 29, .62)";
+        ctx.beginPath();
+        ctx.roundRect(14, 14, 128, 48, 9);
+        ctx.fill();
+        ctx.fillStyle = "#9aaaba";
+        ctx.font = "700 9px Segoe UI, Arial, sans-serif";
+        ctx.textBaseline = "top";
+        ctx.fillText("ALTITUDE", 25, 23);
+        ctx.fillStyle = "#f4f6fc";
+        ctx.font = "600 18px Segoe UI, Arial, sans-serif";
+        ctx.fillText(`${Math.round(altitude).toLocaleString()} m`, 25, 37);
+        ctx.fillStyle = "rgba(231, 239, 246, .65)";
+        ctx.font = "10px Segoe UI, Arial, sans-serif";
+        ctx.textAlign = "right";
+        const sceneLabel = flight && flight.complete
+          ? "SPACE REACHED · 120 KM"
+          : sceneProgress > .6 ? "UPPER ATMOSPHERE" : "ASCENT VIEW";
+        ctx.fillText(sceneLabel, width - 14, 18);
+        const currentMass = flight && config
+          ? config.dryMass + flight.propellant
+          : fields.reduce((total, field) => {
+            const input = document.getElementById(field);
+            return field === "dryMass" || field === "propellantMass"
+              ? total + (input.valueAsNumber || 0)
+              : total;
+          }, 0);
+        const relativeWind = wind.speed - (flight ? flight.horizontalVelocity : 0);
+        const relativeSpeed = flight
+          ? Math.hypot(relativeWind, flight.velocity)
+          : 0;
+        const dynamicPressure = flight
+          ? 0.5 * atmosphereDensity(altitude) * relativeSpeed * relativeSpeed
+          : 0;
+        const currentAtmosphere = atmosphereState(altitude);
+        const speedOfSound = Math.sqrt(1.4 * specificGasConstant * currentAtmosphere.temperature);
+        const machNumber = flight ? Math.abs(flight.velocity) / speedOfSound : 0;
+        ctx.font = "600 10px Segoe UI, Arial, sans-serif";
+        ctx.fillStyle = "rgba(239, 245, 250, .78)";
+        ctx.fillText(`MASS  ${Math.round(currentMass).toLocaleString()} kg`, width - 14, 35);
+        ctx.fillText(`MACH  ${machNumber.toFixed(2)}  ·  Q  ${(dynamicPressure / 1000).toFixed(1)} kPa`,
+          width - 14, 50);
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(239, 245, 250, .78)";
+        ctx.fillText(`DOWNRANGE  ${flight ? flight.downrange.toFixed(0) : "0"} m`, 15, height - 32);
+        ctx.fillText(`CROSSWIND  ${Math.abs(wind.speed).toFixed(1)} m/s`, 15, height - 17);
+        if (flight && flight.crashed) {
+          ctx.textAlign = "center";
+          ctx.font = "700 12px Segoe UI, Arial, sans-serif";
+          ctx.fillStyle = "rgba(24, 13, 18, .84)";
+          ctx.beginPath();
+          ctx.roundRect(width * .5 - 165, height * .43, 330, 47, 9);
+          ctx.fill();
+          ctx.fillStyle = "#ffe0d8";
+          ctx.fillText("SIMULATED FAILURE: lateral wind load exceeded the model limit",
+            width / 2, height * .43 + 28);
+        }
+        ctx.textAlign = "left";
+      }
+
+      function drawChart() {
+        const size = resizeCanvas(chart, chartContext);
+        if (!size) return;
+        const { width, height } = size;
+        const ctx = chartContext;
+        ctx.clearRect(0, 0, width, height);
+        const left = 36, right = 8, top = 7, bottom = 19;
+        const plotWidth = Math.max(1, width - left - right);
+        const plotHeight = Math.max(1, height - top - bottom);
+        const maxTime = Math.max(1, samples[samples.length - 1].time);
+        const maxAltitude = Math.max(100, Math.max(...samples.map(sample => sample.altitude)) * 1.15);
+
+        ctx.font = "9px Segoe UI, Arial, sans-serif";
+        ctx.textBaseline = "middle";
+        for (let i = 0; i <= 2; i++) {
+          const y = top + plotHeight * i / 2;
+          ctx.strokeStyle = "#29354a";
+          ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(width - right, y); ctx.stroke();
+          ctx.fillStyle = "#8290a8";
+          ctx.textAlign = "left";
+          ctx.fillText(Math.round(maxAltitude * (1 - i / 2)).toLocaleString(), 0, y);
+        }
+        ctx.textBaseline = "top";
+        ctx.textAlign = "left";
+        ctx.fillText("0", left, height - bottom + 4);
+        ctx.textAlign = "right";
+        ctx.fillText(`${Math.round(maxTime)}s`, width - right, height - bottom + 4);
+        if (samples.length < 2) return;
+
+        ctx.strokeStyle = "#f4b544";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        samples.forEach((sample, index) => {
+          const x = left + sample.time / maxTime * plotWidth;
+          const y = top + (1 - sample.altitude / maxAltitude) * plotHeight;
+          if (index === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      function isEngineRunning() {
+        return flight && !flight.landed && !flight.complete && !flight.crashed
+          && flight.time < config.burnDuration
+          && flight.propellant > 0;
+      }
+
+      function atmosphereState(altitude) {
+        const geometricAltitude = Math.max(0, altitude);
+        const geopotentialAltitude = earthRadiusMeters * geometricAltitude
+          / (earthRadiusMeters + geometricAltitude);
+        let baseAltitude = 0;
+        let temperature = 288.15;
+        let pressure = 101325;
+
+        for (const layer of atmosphereLayers) {
+          const layerTop = Math.min(geopotentialAltitude, layer.top);
+          const layerDepth = layerTop - baseAltitude;
+          const nextTemperature = temperature + layer.lapseRate * layerDepth;
+
+          if (layer.lapseRate === 0) {
+            pressure *= Math.exp(-gravity * layerDepth
+              / (specificGasConstant * temperature));
+          } else {
+            pressure *= (nextTemperature / temperature)
+              ** (-gravity / (specificGasConstant * layer.lapseRate));
+          }
+          temperature = nextTemperature;
+          baseAltitude = layerTop;
+          if (geopotentialAltitude <= layer.top) {
+            return { pressure, temperature, density: pressure / (specificGasConstant * temperature) };
+          }
+        }
+
+        const densityAtAtmosphereTop = pressure / (specificGasConstant * temperature);
+        const density = densityAtAtmosphereTop
+          * Math.exp(-(geopotentialAltitude - baseAltitude) / 7000);
+        return {
+          pressure: density * specificGasConstant * temperature,
+          temperature,
+          density
+        };
+      }
+
+      function atmosphereDensity(altitude) {
+        return atmosphereState(altitude).density;
+      }
+
+      function localGravity(altitude) {
+        return gravity * (earthRadiusMeters / (earthRadiusMeters + Math.max(0, altitude))) ** 2;
+      }
+
+      function flightDerivative(
+        offset, altitude, velocity, downrange, horizontalVelocity,
+        burnTimeInStep, massFlowRate
+      ) {
+        const propellantBurned = massFlowRate * Math.min(offset, burnTimeInStep);
+        const mass = config.dryMass + Math.max(0, flight.propellant - propellantBurned);
+        const engineRunning = offset < burnTimeInStep;
+        const atmosphere = atmosphereState(altitude);
+        const wind = weatherAt(altitude, flight.time + offset);
+        const relativeHorizontalVelocity = horizontalVelocity - wind.speed;
+        const relativeSpeed = Math.hypot(relativeHorizontalVelocity, velocity);
+        const speedOfSound = Math.sqrt(1.4 * specificGasConstant * atmosphere.temperature);
+        const mach = relativeSpeed / speedOfSound;
+        const transonicDragRise = 0.3 * Math.exp(-0.5 * ((mach - 1) / 0.25) ** 2);
+        const frontalArea = Math.PI * (config.diameter / 2) ** 2;
+        const sideArea = config.diameter * config.diameter * 7.5;
+        const dragScale = 0.5 * atmosphere.density
+          * config.dragCoefficient * (1 + transonicDragRise);
+        const verticalDrag = dragScale * frontalArea
+          * velocity * Math.abs(velocity);
+        const lateralDrag = -dragScale * sideArea
+          * relativeHorizontalVelocity * Math.abs(relativeHorizontalVelocity);
+        const thrustAcceleration = engineRunning ? config.thrust / mass : 0;
+        return {
+          downrangeRate: horizontalVelocity,
+          horizontalVelocityRate: lateralDrag / mass,
+          altitudeRate: velocity,
+          velocityRate: thrustAcceleration - verticalDrag / mass - localGravity(altitude)
+        };
+      }
+
+      function updateReadouts() {
+        document.getElementById("altitude").textContent =
+          `${Math.round(flight ? flight.altitude : 0).toLocaleString()} m`;
+        document.getElementById("velocity").textContent =
+          `${(flight ? Math.hypot(flight.velocity, flight.horizontalVelocity) : 0).toFixed(1)} m/s`;
+        document.getElementById("acceleration").textContent =
+          `${(flight ? Math.hypot(flight.acceleration, flight.horizontalAcceleration) : 0).toFixed(1)} m/s²`;
+        const modelSeconds = flight ? flight.time : 0;
+        const minutes = Math.floor(modelSeconds / 60);
+        const seconds = String(Math.floor(modelSeconds % 60)).padStart(2, "0");
+        document.getElementById("time").textContent = `${minutes}:${seconds}`;
+      }
+
+      function setStatus(label) {
+        status.dataset.state = label;
+        document.getElementById("statusText").textContent = label;
+      }
+
+      function advance(dt) {
+        if (!flight || flight.landed || flight.complete || flight.crashed) return;
+        const massFlowRate = config.thrust / (config.specificImpulse * gravity);
+        const remainingBurnTime = Math.min(
+          Math.max(0, config.burnDuration - flight.time),
+          flight.propellant / massFlowRate);
+        const burnTimeInStep = isEngineRunning()
+          ? Math.min(dt, remainingBurnTime)
+          : 0;
+        const initialAltitude = flight.altitude;
+        const initialVelocity = flight.velocity;
+        const initialDownrange = flight.downrange;
+        const initialHorizontalVelocity = flight.horizontalVelocity;
+        const k1 = flightDerivative(0, initialAltitude, initialVelocity,
+          initialDownrange, initialHorizontalVelocity, burnTimeInStep, massFlowRate);
+        const k2 = flightDerivative(
+          dt / 2,
+          initialAltitude + k1.altitudeRate * dt / 2,
+          initialVelocity + k1.velocityRate * dt / 2,
+          initialDownrange + k1.downrangeRate * dt / 2,
+          initialHorizontalVelocity + k1.horizontalVelocityRate * dt / 2,
+          burnTimeInStep,
+          massFlowRate);
+        const k3 = flightDerivative(
+          dt / 2,
+          initialAltitude + k2.altitudeRate * dt / 2,
+          initialVelocity + k2.velocityRate * dt / 2,
+          initialDownrange + k2.downrangeRate * dt / 2,
+          initialHorizontalVelocity + k2.horizontalVelocityRate * dt / 2,
+          burnTimeInStep,
+          massFlowRate);
+        const k4 = flightDerivative(
+          dt,
+          initialAltitude + k3.altitudeRate * dt,
+          initialVelocity + k3.velocityRate * dt,
+          initialDownrange + k3.downrangeRate * dt,
+          initialHorizontalVelocity + k3.horizontalVelocityRate * dt,
+          burnTimeInStep,
+          massFlowRate);
+        flight.downrange += dt / 6
+          * (k1.downrangeRate + 2 * k2.downrangeRate + 2 * k3.downrangeRate + k4.downrangeRate);
+        flight.horizontalVelocity += dt / 6
+          * (k1.horizontalVelocityRate + 2 * k2.horizontalVelocityRate
+            + 2 * k3.horizontalVelocityRate + k4.horizontalVelocityRate);
+        flight.altitude += dt / 6
+          * (k1.altitudeRate + 2 * k2.altitudeRate + 2 * k3.altitudeRate + k4.altitudeRate);
+        flight.velocity += dt / 6
+          * (k1.velocityRate + 2 * k2.velocityRate + 2 * k3.velocityRate + k4.velocityRate);
+        flight.time += dt;
+        flight.propellant = Math.max(0, flight.propellant - massFlowRate * burnTimeInStep);
+        const currentDerivative = flightDerivative(
+          0, flight.altitude, flight.velocity, flight.downrange, flight.horizontalVelocity,
+          isEngineRunning() ? fixedStep : 0, massFlowRate);
+        flight.acceleration = currentDerivative.velocityRate;
+        flight.horizontalAcceleration = currentDerivative.horizontalVelocityRate;
+        if (flight.altitude <= 0) {
+          flight.altitude = 0;
+          flight.velocity = 0;
+          flight.landed = true;
+        }
+        if (flight.altitude >= spaceCheckpointMeters) {
+          flight.altitude = spaceCheckpointMeters;
+          flight.acceleration = -localGravity(flight.altitude);
+          flight.complete = true;
+        }
+        const wind = weatherAt(flight.altitude, flight.time);
+        const lateralPressure = 0.5 * atmosphereDensity(flight.altitude)
+          * (wind.speed - flight.horizontalVelocity) ** 2;
+        if (!flight.landed && !flight.complete
+          && flight.time > 6 && flight.altitude > 100
+          && lateralPressure > wind.profile.failureLimit) {
+          flight.crashed = true;
+          flight.failurePressure = lateralPressure;
+        }
+        flight.maxAltitude = Math.max(flight.maxAltitude, flight.altitude);
+        if (flight.time - lastChartSample >= 0.1 || flight.landed) {
+          samples.push({ time: flight.time, altitude: flight.altitude });
+          lastChartSample = flight.time;
+        }
+      }
+
+      function frame(timestamp) {
+        if (flight && !paused && !flight.landed && !flight.complete && !flight.crashed) {
+          if (!previousFrame) previousFrame = timestamp;
+          accumulator += Math.min((timestamp - previousFrame) / 1000, 0.1) * simulationTimeScale;
+          previousFrame = timestamp;
+          while (accumulator >= fixedStep) {
+            advance(fixedStep);
+            accumulator -= fixedStep;
+          }
+          updateReadouts();
+          drawChart();
+        }
+        drawScene(timestamp);
+        if (flight && flight.crashed && status.dataset.state !== "CRASHED") {
+          setStatus("CRASHED");
+          document.getElementById("pause").disabled = true;
+        } else if (flight && flight.complete && status.dataset.state !== "SPACE REACHED") {
+          setStatus("SPACE REACHED");
+          document.getElementById("pause").disabled = true;
+        } else if (flight && flight.landed && status.dataset.state !== "LANDED") {
+          setStatus("LANDED");
+          document.getElementById("pause").disabled = true;
+        }
+        animationId = requestAnimationFrame(frame);
+      }
+
+      function launch() {
+        const values = {};
+        for (const id of fields) {
+          const input = document.getElementById(id);
+          const value = input.valueAsNumber;
+          if (!Number.isFinite(value) || value < Number(input.min)) {
+            input.focus();
+            input.setCustomValidity(id === "dragCoefficient"
+              ? "Enter a valid drag coefficient of zero or greater."
+              : "Enter a valid number greater than zero.");
+            input.reportValidity();
+            input.setCustomValidity("");
+            return;
+          }
+          values[id] = value;
+        }
+
+        const launchMass = values.dryMass + values.propellantMass;
+        if (values.thrust <= launchMass * gravity) {
+          const thrustInput = document.getElementById("thrust");
+          thrustInput.focus();
+          thrustInput.setCustomValidity(
+            "Thrust must exceed the rocket's initial weight for it to lift off.");
+          thrustInput.reportValidity();
+          thrustInput.setCustomValidity("");
+          return;
+        }
+
+        config = values;
+        config.weather = document.getElementById("weather").value;
+        flight = {
+          time: 0, altitude: 0, velocity: 0, acceleration: 0,
+          downrange: 0, horizontalVelocity: 0, horizontalAcceleration: 0,
+          propellant: values.propellantMass, maxAltitude: 0,
+          landed: false, complete: false, crashed: false
+        };
+        samples.length = 0;
+        samples.push({ time: 0, altitude: 0 });
+        paused = false;
+        previousFrame = 0;
+        accumulator = 0;
+        lastChartSample = 0;
+        for (const id of controls) document.getElementById(id).disabled = true;
+        document.getElementById("launch").disabled = true;
+        document.getElementById("pause").disabled = false;
+        document.getElementById("pause").textContent = "Pause";
+        setStatus("IN FLIGHT");
+      }
+
+      function reset() {
+        flight = null;
+        config = null;
+        paused = false;
+        previousFrame = 0;
+        accumulator = 0;
+        lastChartSample = 0;
+        samples.length = 0;
+        samples.push({ time: 0, altitude: 0 });
+        for (const id of controls) {
+          const input = document.getElementById(id);
+          input.value = id === "weather" ? "calm" : input.defaultValue;
+          input.disabled = false;
+          input.setCustomValidity("");
+        }
+        document.getElementById("launch").disabled = false;
+        document.getElementById("pause").disabled = true;
+        document.getElementById("pause").textContent = "Pause";
+        setStatus("READY");
+        window.scrollTo(0, 0);
+        document.querySelector(".setup").scrollTop = 0;
+        updateReadouts();
+        drawScene();
+        drawChart();
+      }
+
+      document.getElementById("launch").addEventListener("click", launch);
+      document.getElementById("reset").addEventListener("click", reset);
+      document.getElementById("pause").addEventListener("click", () => {
+        if (!flight || flight.landed || flight.complete || flight.crashed) return;
+        paused = !paused;
+        document.getElementById("pause").textContent = paused ? "Resume" : "Pause";
+        if (paused) {
+          setStatus("PAUSED");
+        } else {
+          previousFrame = 0;
+          setStatus("IN FLIGHT");
+        }
+      });
+      for (const field of controls) {
+        const input = document.getElementById(field);
+        input.addEventListener("input", () => input.setCustomValidity(""));
+      }
+      window.addEventListener("resize", () => { drawScene(performance.now()); drawChart(); });
+      updateReadouts();
+      drawScene();
+      drawChart();
+      animationId = requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# .NET build outputs
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Test and publish outputs
+TestResults/
+artifacts/
+
+# Operating system files
+Thumbs.db
+.DS_Store
